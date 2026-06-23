@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         全能网页限制解除与媒体一键提取助手
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  自动解除任意网页的复制、剪切、右键、选中文本限制。并在右下角提供极简浮动工具箱，支持一键提取网页所有图片，且内置打赏通道支持作者。
 // @author       czx110202 & xiilxj
 // @match        *://*/*
@@ -20,6 +20,27 @@
         afdianLink: 'https://afdian.com/a/czx110202' // 宝宝注册爱发电后可修改此链接
     };
 
+    // 安全注入 CSS 的辅助函数
+    function safeInjectStyle(cssText, id) {
+        const inject = () => {
+            if (id && document.getElementById(id)) return;
+            const style = document.createElement('style');
+            if (id) style.id = id;
+            style.innerHTML = cssText;
+            const target = document.head || document.documentElement;
+            if (target) {
+                target.appendChild(style);
+            }
+        };
+
+        if (document.head || document.documentElement) {
+            inject();
+        } else {
+            // 如果此时 DOM 还没准备好，就等待 DOMContentLoaded 或 readystatechange
+            document.addEventListener('DOMContentLoaded', inject);
+        }
+    }
+
     // ================= 核心逻辑：解除网页限制 =================
     const eventsToBlock = ['copy', 'cut', 'contextmenu', 'selectstart', 'dragstart'];
     
@@ -30,22 +51,17 @@
         });
 
         // 2. 动态注入 CSS，强制覆盖所有 user-select 禁用样式
-        const styleId = 'restrict-remover-css';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.innerHTML = `
-                * {
-                    -webkit-user-select: text !important;
-                    -moz-user-select: text !important;
-                    -ms-user-select: text !important;
-                    user-select: text !important;
-                }
-                ::-moz-selection { background: #3390FF !important; color: #fff !important; }
-                ::selection { background: #3390FF !important; color: #fff !important; }
-            `;
-            document.documentElement.appendChild(style);
-        }
+        const restrictCss = `
+            * {
+                -webkit-user-select: text !important;
+                -moz-user-select: text !important;
+                -ms-user-select: text !important;
+                user-select: text !important;
+            }
+            ::-moz-selection { background: #3390FF !important; color: #fff !important; }
+            ::selection { background: #3390FF !important; color: #fff !important; }
+        `;
+        safeInjectStyle(restrictCss, 'restrict-remover-css');
     }
 
     function disableRemover() {
@@ -62,11 +78,11 @@
         }
     }
 
-    // 初始化运行
+    // 初始化运行限制解除
     enableRemover();
 
     // ================= 界面逻辑：右下角悬浮工具箱 =================
-    // 注入 UI 样式
+    // UI 样式
     const uiStyle = `
         #remover-float-btn {
             position: fixed;
@@ -229,12 +245,13 @@
         .gallery-download-btn:hover { background: #3390FF; }
     `;
 
-    // 注入页面
-    const styleElement = document.createElement('style');
-    styleElement.innerHTML = uiStyle;
-    document.documentElement.appendChild(styleElement);
+    // 安全注入 UI 样式
+    safeInjectStyle(uiStyle, 'remover-ui-css');
 
-    window.addEventListener('DOMContentLoaded', () => {
+    // 等待 DOMContentLoaded 后初始化 UI 元素
+    const initUI = () => {
+        if (document.getElementById('remover-float-btn')) return; // 防止重复注入
+
         // 创建浮动按钮
         const floatBtn = document.createElement('div');
         floatBtn.id = 'remover-float-btn';
@@ -248,12 +265,12 @@
         menuBox.innerHTML = `
             <div class="remover-menu-title">
                 <span>⚡ 限制解除助手</span>
-                <span style="font-size: 11px; color: #888;">v1.0</span>
+                <span style="font-size: 11px; color: #888;">v1.1</span>
             </div>
             <div class="remover-menu-item">
                 <span>解除网页复制限制</span>
                 <label class="remover-switch">
-                    <input type="checkbox" id="remover-toggle-switch" \${config.removeRestrictions ? 'checked' : ''}>
+                    <input type="checkbox" id="remover-toggle-switch" ${config.removeRestrictions ? 'checked' : ''}>
                     <span class="remover-slider"></span>
                 </label>
             </div>
@@ -261,7 +278,7 @@
                 <span>🖼️ 一键提取网页图片</span>
                 <button class="remover-btn">提取</button>
             </div>
-            <a class="remover-menu-item" href="\${config.afdianLink}" target="_blank" style="text-decoration: none; background: #FFF4F4; border: 1px dashed #FFCCCC; margin-top: 5px;">
+            <a class="remover-menu-item" href="${config.afdianLink}" target="_blank" style="text-decoration: none; background: #FFF4F4; border: 1px dashed #FFCCCC; margin-top: 5px;">
                 <span style="color: #FF5A5A; font-weight: bold;">☕ 觉得好用？赞助作者</span>
                 <span style="font-size: 11px; color: #FF9999;">去打赏 ➔</span>
             </a>
@@ -333,8 +350,8 @@
                 const item = document.createElement('div');
                 item.className = 'gallery-item';
                 item.innerHTML = `
-                    <img src="\${url}" loading="lazy" />
-                    <button class="gallery-download-btn" data-url="\${url}">保存</button>
+                    <img src="${url}" loading="lazy" />
+                    <button class="gallery-download-btn" data-url="${url}">保存</button>
                 `;
                 galleryContainer.appendChild(item);
             });
@@ -358,7 +375,13 @@
         closeGalleryBtn.addEventListener('click', () => {
             gallery.style.display = 'none';
         });
-    });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initUI);
+    } else {
+        initUI();
+    }
 
     console.log("%c⚡ 全能网页限制解除与媒体一键提取助手已激活！觉得好用可以支持作者哦：" + config.afdianLink, "color: #3390FF; font-weight: bold; font-size: 12px;");
 })();
