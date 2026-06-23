@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         全能网页限制解除与媒体一键提取助手
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  自动解除任意网页的复制、剪切、右键、选中文本限制。并在右下角提供极简浮动工具箱，支持一键提取网页所有图片，且内置打赏通道支持作者。
 // @author       czx110202 & xiilxj
 // @match        *://*/*
@@ -10,7 +10,7 @@
 // @match        file:///*
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
-// @run-at       document-start
+// @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
 
